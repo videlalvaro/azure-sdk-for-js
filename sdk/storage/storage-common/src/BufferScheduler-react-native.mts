@@ -1,7 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-// This file is used as a shim of "BufferScheduler" for bundlers
-// when trying to bundle "BufferScheduler"
-// "BufferScheduler" class is only available in Node.js runtime
-export class BufferScheduler {}
+// React Native uses the same stub as browser.
+export { OutgoingHandler, BufferScheduler } from "./BufferScheduler-browser.mjs";

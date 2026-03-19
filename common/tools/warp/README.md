@@ -73,7 +73,6 @@ targets:
 
   - name: browser
     tsconfig: tsconfig.browser.json
-    polyfillSuffix: true
 ```
 
 ### Config reference
@@ -99,7 +98,6 @@ Ordered array of build targets. Declaration order controls the condition key ord
 | `name`           | `string`                   | ✅       | Identifier used in logs, size reports, and dedup. Must be unique across targets                                                                                 |
 | `condition`      | `string`                   | —        | Node.js exports condition (`import`, `require`, `browser`, `react-native`, anything). Defaults to `name`. Must be unique across targets                         |
 | `tsconfig`       | `string`                   | ✅       | Path to the target's tsconfig. Must set `outDir`; should set `rootDir`. Must point to an existing file                                                          |
-| `polyfillSuffix` | `string \| true \| false`  | —        | Per-target file substitution suffix (see below). Set to `true` to use `-<name>`, or a custom string. Omit or set to `false` to disable                          |
 | `moduleType`     | `"module"` \| `"commonjs"` | —        | Module type for the `outDir` package.json shim. Auto-inferred from tsconfig if omitted (`ts.ModuleKind.CommonJS` → `"commonjs"`, everything else → `"module"`)  |
 | `resolveImports` | `boolean`                  | —        | When `true`, post-process emitted files to resolve `#`-prefixed import specifiers using `package.json` `"imports"`. See [Import resolution](#import-resolution) |
 
@@ -129,19 +127,9 @@ A `{ "type": "module" }` or `{ "type": "commonjs" }` shim is also written into e
 
 Writes to `package.json` are atomic (temp file + rename) to avoid corruption on crash.
 
-### Polyfill substitution
-
-Polyfill substitution is opt-in. Set `polyfillSuffix: true` on a target to enable it (uses `-<name>` as the suffix), or provide a custom string like `"-browser"`. When enabled, if you have `foo.ts` and `foo-browser.mts`, the browser target compiles `foo-browser.mts` but emits it as `foo.js`. The output filename stays the same — callers never know. Omit `polyfillSuffix` or set it to `false` to disable scanning.
-
-- `.mts` polyfills are preferred over `.ts`
-- Polyfills must be type-compatible with the originals (mismatches surface as compile errors, on purpose)
-- Polyfill source files are filtered from rootNames so they don't produce extra `.mjs` output files
-- Discovery is driven by the parsed tsconfig's file list, so it respects `include`/`exclude` patterns
-- Targets with a configured `polyfillSuffix` but no actual polyfill files on disk are treated as no-polyfill targets for dedup purposes
-
 ### Import resolution
 
-Import resolution is a standards-based alternative to polyfill substitution that uses [Node.js subpath imports](https://nodejs.org/api/packages.html#subpath-imports) (`#`-prefixed specifiers) for per-target file selection.
+Import resolution uses [Node.js subpath imports](https://nodejs.org/api/packages.html#subpath-imports) (`#`-prefixed specifiers) for per-target file selection.
 
 Set `resolveImports: true` on a target to enable it. When enabled, after TypeScript/esbuild emits output, Warp post-processes every `.js` and `.d.ts` file to resolve `#`-prefixed import specifiers using the `"imports"` field from `package.json` and the target's export condition.
 
@@ -171,17 +159,9 @@ Set `resolveImports: true` on a target to enable it. When enabled, after TypeScr
    - Browser output: `import { PipelineRequest } from "./interfaces-browser.mjs";`
    - Node output: `import { PipelineRequest } from "./interfaces.js";`
 
-**Advantages over `polyfillSuffix`:**
-
-- **Per-target type-checking** — each target's tsconfig sees only the correct platform types, catching cross-platform type errors that `polyfillSuffix` cannot detect
-- **Standards-based** — uses Node.js subpath imports and TypeScript `customConditions`, so IDEs and `tsc --noEmit` understand the resolution without Warp
-- **Self-contained output** — the emitted files contain only relative paths, with no runtime dependency on `#imports` resolution
-
-`resolveImports` and `polyfillSuffix` are orthogonal and can coexist on the same target during incremental migration.
-
 ### Target deduplication
 
-Targets with identical compiler options, source files, and effective polyfill suffix are compiled once, then the output is copied. Saves real time when you have targets that only differ in `outDir`. The dedup signature includes a hash of the sorted file list to prevent incorrect dedup when targets have different `include`/`exclude` patterns.
+Targets with identical compiler options and source files are compiled once, then the output is copied. Saves real time when you have targets that only differ in `outDir`. The dedup signature includes a hash of the sorted file list to prevent incorrect dedup when targets have different `include`/`exclude` patterns.
 
 ### Source-group type checking
 
@@ -204,7 +184,6 @@ Sequential mode (the default) is typically faster for most packages because esbu
 The parallel orchestrator:
 
 - Uses Kahn's algorithm for cycle detection — throws immediately if the task graph has cycles.
-- Pre-discovers polyfills on the main thread and passes the map to workers to avoid redundant filesystem I/O.
 - Handles `.d.ts` copying and dedup copying on the main thread (since they write to independent directories).
 - If a worker crashes, the error includes the target name for context and suggests retrying without `--parallel`.
 
@@ -222,7 +201,7 @@ The programmatic `watch()` function returns an `AbortController` for stopping th
 
 ### Log levels and diagnostic buffering
 
-- `--verbose` prints debug details like cache hits, polyfill discovery, and per-file events.
+- `--verbose` prints debug details like cache hits and per-file events.
 - `--quiet` suppresses everything except errors — useful in CI pipelines where you only care about pass/fail.
 - Default (`info`) shows normal build output.
 
@@ -308,10 +287,9 @@ console.log(result.sizeReport); // SizeReport with per-target metrics
 | `validateTsconfigPaths(config, dir, source)`            | Check that all tsconfig files referenced by targets exist                   |
 | `validateOutDirs(configs)`                              | Verify that all targets have distinct `outDir`s                             |
 | `inferModuleType(moduleKind)`                           | Map TS module kind → `"module"` / `"commonjs"`                              |
-| `discoverPolyfills(files, suffix)`                      | Find polyfill files for a suffix                                            |
-| `groupBySignature(configs, getEffectiveSuffix?)`        | Group targets by options signature for dedup                                |
-| `optionsSignature(options, fileNames, polyfillSuffix?)` | Compute a dedup signature for a target's compiler options + file list       |
-| `sourceIdentity(fileNames, polyfillSuffix?)`            | Compute a source identity hash for type-check grouping                      |
+| `groupBySignature(configs)`                             | Group targets by options signature for dedup                                |
+| `optionsSignature(options, fileNames)`                  | Compute a dedup signature for a target's compiler options + file list       |
+| `sourceIdentity(fileNames)`                             | Compute a source identity hash for type-check grouping                      |
 | `cleanOutDir(dir)`                                      | `rm -rf` a directory (async)                                                |
 | `copyDir(src, dest)`                                    | Recursive async copy with correct symlink handling                          |
 | `copyDtsFiles(src, dest)`                               | Async copy of `.d.ts`/`.d.ts.map` files only                                |
@@ -327,7 +305,6 @@ console.log(result.sizeReport); // SizeReport with per-target metrics
 | `sourcePathToOutputPath(source, rootDir, outDir, root)` | Map a source file path to its output path                                   |
 | `diagnosticCategoryLabel(category)`                     | Map `ts.DiagnosticCategory` to `"error"` / `"warning"` / etc.               |
 | `createCachedHost(options, cache)`                      | Create a `CompilerHost` backed by a `SharedSourceFileCache`                 |
-| `createPolyfillHost(options, polyfillMap, cache)`       | Create a `CompilerHost` that substitutes polyfill content                   |
 
 #### Classes
 

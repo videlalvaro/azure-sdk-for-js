@@ -148,6 +148,33 @@ async function runTypeScript(tsConfig: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Rewrite a source extension (.ts, .mts, .cts) to its compiled counterpart (.js, .mjs, .cjs).
+ */
+function rewriteSourceExtension(p: string): string {
+  return p.replace(/\.mts$/, ".mjs").replace(/\.cts$/, ".cjs").replace(/\.ts$/, ".js");
+}
+
+/**
+ * Resolve a package.json `imports` value for use in dist-test.
+ * If the value is a conditional object (e.g. { browser: "...", default: "..." }),
+ * resolve to the browser variant. Rewrite source extensions to compiled extensions
+ * so paths point to the TypeScript-compiled output files.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveImportForDistTest(value: any): string {
+  if (typeof value === "string") {
+    return rewriteSourceExtension(value);
+  }
+  if (typeof value === "object" && value !== null) {
+    const resolved = value.browser ?? value.default;
+    if (typeof resolved === "string") {
+      return rewriteSourceExtension(resolved);
+    }
+  }
+  return value;
+}
+
 async function compileForEnvironment(
   type: string,
   tsConfig: string,
@@ -171,10 +198,12 @@ async function compileForEnvironment(
     mkdirSync(browserTestPath, { recursive: true });
   }
 
-  // Create import map
-  const imports: Record<string, string> = {};
+  // Create import map for dist-test, resolving conditional imports to the
+  // browser variant and rewriting source extensions to compiled extensions.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const imports: Record<string, any> = {};
   for (const [key, value] of importMap.entries()) {
-    imports[key] = value;
+    imports[key] = resolveImportForDistTest(value);
   }
 
   const packageJson = {

@@ -5,11 +5,15 @@ exports:
 targets:
   - name: browser
     tsconfig: "../../../tsconfig.src.browser.json"
+    resolveImports: true
   - name: react-native
     tsconfig: "../../../tsconfig.src.react-native.json"
+    resolveImports: true
   - name: esm
     condition: import
     tsconfig: "../../../tsconfig.src.esm.json"
+    resolveImports: true
   - name: commonjs
     condition: require
     tsconfig: "../../../tsconfig.src.cjs.json"
+    resolveImports: true

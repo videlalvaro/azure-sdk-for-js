@@ -294,15 +294,10 @@ export async function build(options: BuildOptions = {}): Promise<BuildResult> {
     let hasResolveErrors = false;
 
     for (const pc of resolveTargets) {
-      // When polyfillSuffix is active, always resolve to the default (base) path.
-      // polyfillSuffix renames output files from polyfill names to base names,
-      // so specifiers must point to base names (e.g., ./internal.js not ./internal-browser.mjs).
-      const conditions: ReadonlySet<string> = pc.target.polyfillSuffix
-        ? new Set(["default"])
-        : buildConditionsSet(
-            pc.target.condition,
-            pc.target.moduleType ?? inferModuleType(pc.parsedConfig.options.module),
-          );
+      const conditions: ReadonlySet<string> = buildConditionsSet(
+        pc.target.condition,
+        pc.target.moduleType ?? inferModuleType(pc.parsedConfig.options.module),
+      );
       const { filesChanged, unresolvedSpecifiers, missingTargets } = await resolveImportsInDir(
         pc.outDir,
         importsMap,

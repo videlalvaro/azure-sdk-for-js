@@ -4,7 +4,7 @@
 import type { HttpResponse, PathUncheckedResponse } from "./common.js";
 
 /**
- * Http Response which body is a NodeJS stream object
+ * Http Response which body is a browser ReadableStream
  */
 export type HttpBrowserStreamResponse = HttpResponse & {
   /**
@@ -15,14 +15,11 @@ export type HttpBrowserStreamResponse = HttpResponse & {
 
 /**
  * Defines the type for a method that supports getting the response body as
- * a raw stream
+ * a raw stream. In browser environments, only `asBrowserStream` is available.
  */
 export type StreamableMethod<TResponse = PathUncheckedResponse> = PromiseLike<TResponse> & {
   /**
-   * Returns the response body as a browser (Web) stream. Only available in the browser. If you require a Web Stream of the response in Node, consider using the
-   * `Readable.toWeb` Node API on the result of `asNodeStream`.
+   * Returns the response body as a browser (Web) stream.
    */
   asBrowserStream: () => Promise<HttpBrowserStreamResponse>;
 };
-
-export type HttpNodeStreamResponse = never;

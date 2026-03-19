@@ -1,18 +1,15 @@
-# warp.config.yml — @azure/api-management-custom-widgets-tools build configuration
-
 exports:
-  "./package.json": "./package.json"
-  ".": "./src/index.ts"
-
+  ./package.json: ./package.json
+  .: ./src/index.ts
 targets:
   - name: browser
-    tsconfig: "../../../tsconfig.src.browser.json"
-    polyfillSuffix: "-browser"
-
+    tsconfig: ../../../tsconfig.src.browser.json
+    resolveImports: true
   - name: esm
     condition: import
-    tsconfig: "../../../tsconfig.src.esm.json"
-
+    tsconfig: ../../../tsconfig.src.esm.json
+    resolveImports: true
   - name: commonjs
     condition: require
-    tsconfig: "../../../tsconfig.src.cjs.json"
+    tsconfig: ../../../tsconfig.src.cjs.json
+    resolveImports: true

@@ -18,8 +18,6 @@ export type { CompileResult, ParsedTargetConfig } from "./compiler.ts";
 export {
   SharedSourceFileCache,
   createCachedHost,
-  createPolyfillHost,
-  discoverPolyfills,
   optionsSignature,
   sourceIdentity,
   groupBySignature,

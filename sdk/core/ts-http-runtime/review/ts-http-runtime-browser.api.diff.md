@@ -7,7 +7,22 @@ For the complete API surface, see the corresponding -node.api.md file.
 ===================================================================
 --- NodeJS
 +++ browser
-@@ -476,13 +476,18 @@
+@@ -253,12 +253,12 @@
+     kind: "noAuth";
+ }
+ 
+ // @public
+-export type NodeBuffer = Buffer;
++export type NodeBuffer = never;
+ 
+ // @public
+-export type NodeReadableStream = NodeJS.ReadableStream;
++export type NodeReadableStream = never;
+ 
+ // @public
+ export interface OAuth2AuthScheme<TFlows extends OAuth2Flow[]> {
+     flows: TFlows;
+@@ -482,13 +482,18 @@
      put: (options?: RequestParameters) => TResponse;
      trace: (options?: RequestParameters) => TResponse;
  }

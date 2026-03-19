@@ -108,5 +108,12 @@
     "typescript": "catalog:",
     "vitest": "catalog:testing"
   },
-  "module": "./dist/esm/index.js"
+  "module": "./dist/esm/index.js",
+  "imports": {
+    "#platform/*": {
+      "browser": "./src/*-browser.mts",
+      "react-native": "./src/*-react-native.mts",
+      "default": "./src/*.ts"
+    }
+  }
 }

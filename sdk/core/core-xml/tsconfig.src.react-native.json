@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.src.react-native.json",
+  "compilerOptions": {
+    "types": ["node", "trusted-types"]
+  },
+  "include": [
+    "${configDir}/src/**/index.ts",
+    "${configDir}/src/**/*-react-native.mts",
+    "${configDir}/src/**/*-browser.mts"
+  ]
+}
