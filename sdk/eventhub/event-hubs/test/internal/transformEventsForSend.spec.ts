@@ -285,4 +285,88 @@ describe("transformEventsForSend", () => {
       }
     });
   });
+
+  describe("idempotent batch preserves message body and annotations", () => {
+    it("preserves event bodies and applies correct sequence numbers without decode+re-encode", async () => {
+      const producerClient = createProducer({ enableIdempotentRetries: true }).producer;
+      const batch = await producerClient.createBatch({ partitionId: "0" });
+
+      const eventBodies = ["first-message", "second-message", "third-message"];
+      for (const body of eventBodies) {
+        batch.tryAdd({ body });
+      }
+      await producerClient.close();
+
+      const publishingProps: PartitionPublishingProperties = {
+        isIdempotentPublishingEnabled: true,
+        partitionId: "0",
+        lastPublishedSequenceNumber: 41,
+        ownerLevel: 2,
+        producerGroupId: 7,
+      };
+      const startingSequenceNumber = publishingProps.lastPublishedSequenceNumber! + 1;
+
+      const encodedMessage = transformEventsForSend(batch, publishingProps);
+      const rheaMessages = decodeEncodedMessage(encodedMessage);
+
+      should.equal(rheaMessages.length, eventBodies.length, "All events should be present.");
+
+      for (let i = 0; i < rheaMessages.length; i++) {
+        // Verify body content is preserved
+        should.equal(
+          rheaMessages[i].body,
+          eventBodies[i],
+          `Event body at index ${i} should be preserved.`,
+        );
+
+        // Verify idempotent annotations are correct
+        should.equal(
+          rheaMessages[i].message_annotations![
+            idempotentProducerAmqpPropertyNames.producerSequenceNumber
+          ],
+          startingSequenceNumber + i,
+          `Sequence number at index ${i} should be ${startingSequenceNumber + i}.`,
+        );
+        should.equal(
+          rheaMessages[i].message_annotations![idempotentProducerAmqpPropertyNames.epoch],
+          publishingProps.ownerLevel,
+          `Epoch at index ${i} should match ownerLevel.`,
+        );
+        should.equal(
+          rheaMessages[i].message_annotations![idempotentProducerAmqpPropertyNames.producerId],
+          publishingProps.producerGroupId,
+          `ProducerId at index ${i} should match producerGroupId.`,
+        );
+      }
+    });
+
+    it("produces same output for idempotent and non-idempotent batches when no annotations needed", async () => {
+      const producerClient = createProducer().producer;
+      const batch = await producerClient.createBatch();
+
+      batch.tryAdd({ body: "test-event-1" });
+      batch.tryAdd({ body: "test-event-2" });
+      await producerClient.close();
+
+      const publishingProps: PartitionPublishingProperties = {
+        isIdempotentPublishingEnabled: false,
+        partitionId: "",
+      };
+
+      const encodedMessage = transformEventsForSend(batch, publishingProps);
+      const rheaMessages = decodeEncodedMessage(encodedMessage);
+
+      should.equal(rheaMessages.length, 2, "Both events should be present.");
+      should.equal(rheaMessages[0].body, "test-event-1", "First event body should be preserved.");
+      should.equal(rheaMessages[1].body, "test-event-2", "Second event body should be preserved.");
+
+      // Should not have idempotent annotations
+      should.not.exist(
+        rheaMessages[0].message_annotations?.[
+          idempotentProducerAmqpPropertyNames.producerSequenceNumber
+        ],
+        "Non-idempotent events should not have sequence numbers.",
+      );
+    });
+  });
 });
