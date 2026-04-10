@@ -19,6 +19,16 @@ export const sequenceSectionTypeCode = 0x76 as const;
 /** @internal */
 export const valueSectionTypeCode = 0x77 as const;
 
+function stringNeedsJsonEscaping(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x22 || code === 0x5c || code === 0x2028 || code === 0x2029) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * The default data transformer that will be used by the Azure SDK.
  * @internal
@@ -34,25 +44,34 @@ export const defaultDataTransformer = {
    */
   encode(body: unknown, bodyType: BodyTypes): any {
     let result: any;
+    const normalizedBody = body === undefined ? null : body;
     // string, undefined, null, boolean, array, object, number should end up here
     // coercing undefined to null as that will ensure that null value will be given to the
     // customer on receive.
-    if (body === undefined) body = null;
-
     if (bodyType === "value") {
       // TODO: Expose value_section from `rhea` similar to the data_section and sequence_section.
       // Right now there isn't a way to create a value section officially.
-      result = message.data_section(body);
+      result = message.data_section(normalizedBody);
       result.typecode = valueSectionTypeCode;
     } else if (bodyType === "sequence") {
-      result = message.sequence_section(body);
-    } else if (isBuffer(body) || body instanceof Uint8Array) {
-      result = message.data_section(body);
-    } else if (body === null && bodyType === "data") {
+      result = message.sequence_section(normalizedBody);
+    } else if (isBuffer(normalizedBody) || normalizedBody instanceof Uint8Array) {
+      result = message.data_section(normalizedBody);
+    } else if (normalizedBody === null && bodyType === "data") {
       result = message.data_section(null);
     } else {
       try {
-        const bodyStr = JSON.stringify(body);
+        let bodyStr: string;
+
+        if (typeof normalizedBody === "string") {
+          bodyStr =
+            stringNeedsJsonEscaping(normalizedBody) ? JSON.stringify(normalizedBody) : `"${normalizedBody}"`;
+        } else if (typeof normalizedBody === "number" || typeof normalizedBody === "boolean") {
+          bodyStr = String(normalizedBody);
+        } else {
+          bodyStr = JSON.stringify(normalizedBody);
+        }
+
         result = message.data_section(Buffer.from(bodyStr, "utf8"));
       } catch (err: any) {
         const msg =
@@ -127,6 +146,9 @@ function tryToJsonDecode(body: unknown): unknown {
     // Trying to stringify and JSON.parse() anything else will fail flat and we shall return
     // the original type back
     const bodyStr: string = processedBody.toString("utf8");
+    if (!looksLikeJson(bodyStr)) {
+      return processedBody;
+    }
     processedBody = JSON.parse(bodyStr);
   } catch (err: any) {
     logger.verbose(
@@ -135,6 +157,30 @@ function tryToJsonDecode(body: unknown): unknown {
     );
   }
   return processedBody;
+}
+
+function looksLikeJson(body: string): boolean {
+  const trimmed = body.trimStart();
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  switch (trimmed[0]) {
+    case "{":
+    case "[":
+    case '"':
+      return true;
+    case "t":
+      return trimmed === "true";
+    case "f":
+      return trimmed === "false";
+    case "n":
+      return trimmed === "null";
+    case "-":
+      return trimmed.length > 1 && /\d/.test(trimmed[1]);
+    default:
+      return /\d/.test(trimmed[0]);
+  }
 }
 
 /**
